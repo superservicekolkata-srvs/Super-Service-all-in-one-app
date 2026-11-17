@@ -1,0 +1,8 @@
+{
+  "name": "Super Service",
+  "description": "Multi-portal service operations, task & shift alerts, internal messaging, admin broadcasts, and customizable notification tunes for Super Service.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

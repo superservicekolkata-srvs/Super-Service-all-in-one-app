@@ -1,0 +1,143 @@
+{
+  "entities": {
+    "AdminRecord": {
+      "title": "AdminRecord",
+      "description": "Authorized Super Service administrator registry entry.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "Firebase Auth UID of the administrator" },
+        "email": { "type": "string", "description": "Verified administrator email" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp" }
+      },
+      "required": ["uid", "email", "createdAt"]
+    },
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "Authenticated user profile with portal role and optional contact phone.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "Owner UID" },
+        "displayName": { "type": "string", "description": "User display name" },
+        "email": { "type": "string", "description": "Google account email" },
+        "portalRole": { "type": "string", "enum": ["admin", "staff", "client", "guest"] },
+        "phoneNumber": { "type": "string", "description": "Optional phone number for SMS dispatch" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp" }
+      },
+      "required": ["userId", "displayName", "email", "portalRole", "createdAt"]
+    },
+    "ServiceTask": {
+      "title": "ServiceTask",
+      "description": "Service task assignment, calendar reminder, shift checkout, or service request.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "Owner UID" },
+        "title": { "type": "string", "description": "Task title" },
+        "description": { "type": "string", "description": "Task details" },
+        "taskType": { "type": "string", "enum": ["task_assignment", "calendar_reminder", "shift_checkout", "service_request"] },
+        "status": { "type": "string", "enum": ["pending", "in_progress", "completed"] },
+        "dueDateLabel": { "type": "string", "description": "Human-readable schedule or shift time" },
+        "contactPhone": { "type": "string", "description": "Optional phone number for SMS dispatch" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp" }
+      },
+      "required": ["userId", "title", "description", "taskType", "status", "dueDateLabel", "createdAt"]
+    },
+    "ServiceMessage": {
+      "title": "ServiceMessage",
+      "description": "Internal Staff/Admin/Client message or call log entry.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "Owner UID" },
+        "senderName": { "type": "string", "description": "Sender name" },
+        "recipientName": { "type": "string", "description": "Recipient name or portal" },
+        "channel": { "type": "string", "enum": ["message", "call_log"] },
+        "body": { "type": "string", "description": "Message or call summary" },
+        "isUrgent": { "type": "boolean", "description": "Urgency indicator" },
+        "recipientPhone": { "type": "string", "description": "Optional phone number for SMS dispatch" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp" }
+      },
+      "required": ["userId", "senderName", "recipientName", "channel", "body", "isUrgent", "createdAt"]
+    },
+    "AppNotification": {
+      "title": "AppNotification",
+      "description": "User-scoped notification item for tasks, reminders, messages, and service updates.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "Owner UID" },
+        "title": { "type": "string", "description": "Notification title" },
+        "body": { "type": "string", "description": "Notification body" },
+        "type": { "type": "string", "enum": ["task_assignment", "calendar_reminder", "shift_checkout", "internal_message", "call_log", "service_request", "broadcast"] },
+        "isRead": { "type": "boolean", "description": "Read status" },
+        "isBroadcast": { "type": "boolean", "description": "Whether this originated from a broadcast" },
+        "targetAudience": { "type": "string", "enum": ["Personal", "Staff", "Clients", "Guests", "All Three"] },
+        "relatedTaskId": { "type": "string", "description": "Optional linked task ID" },
+        "contactPhone": { "type": "string", "description": "Optional phone number" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp" }
+      },
+      "required": ["userId", "title", "body", "type", "isRead", "isBroadcast", "targetAudience", "createdAt"]
+    },
+    "BroadcastAlert": {
+      "title": "BroadcastAlert",
+      "description": "Official Admin broadcast sent to Staff, Clients, Guests, or All Three.",
+      "type": "object",
+      "properties": {
+        "authorId": { "type": "string", "description": "Admin UID" },
+        "authorEmail": { "type": "string", "description": "Admin email" },
+        "title": { "type": "string", "description": "Broadcast headline" },
+        "body": { "type": "string", "description": "Broadcast message" },
+        "targetAudience": { "type": "string", "enum": ["Staff", "Clients", "Guests", "All Three"] },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp" }
+      },
+      "required": ["authorId", "authorEmail", "title", "body", "targetAudience", "createdAt"]
+    },
+    "BroadcastState": {
+      "title": "BroadcastState",
+      "description": "Per-user read and dismissal tracking for official broadcasts.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "Owner UID" },
+        "broadcastId": { "type": "string", "description": "Referenced BroadcastAlert ID" },
+        "isRead": { "type": "boolean", "description": "Whether user marked broadcast read" },
+        "isDismissed": { "type": "boolean", "description": "Whether user removed broadcast from inbox" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp" }
+      },
+      "required": ["userId", "broadcastId", "isRead", "isDismissed", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/admins/{uid}": {
+      "schema": { "$ref": "#/entities/AdminRecord" },
+      "description": "Admin user registry"
+    },
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/UserProfile" },
+      "description": "Authenticated user profile and portal role"
+    },
+    "/users/{userId}/tasks/{taskId}": {
+      "schema": { "$ref": "#/entities/ServiceTask" },
+      "description": "User's service tasks, calendar reminders, and shift schedules"
+    },
+    "/users/{userId}/messages/{messageId}": {
+      "schema": { "$ref": "#/entities/ServiceMessage" },
+      "description": "User's internal messages and call logs"
+    },
+    "/users/{userId}/notifications/{notificationId}": {
+      "schema": { "$ref": "#/entities/AppNotification" },
+      "description": "User's personal notification records"
+    },
+    "/broadcasts/{broadcastId}": {
+      "schema": { "$ref": "#/entities/BroadcastAlert" },
+      "description": "Official Admin broadcast alerts"
+    },
+    "/users/{userId}/broadcast_states/{broadcastId}": {
+      "schema": { "$ref": "#/entities/BroadcastState" },
+      "description": "Per-user read/dismiss state for official broadcasts"
+    }
+  }
+}

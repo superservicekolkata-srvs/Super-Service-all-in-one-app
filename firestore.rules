@@ -1,0 +1,236 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Global default-deny safety net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isBootstrappedAdmin() {
+      return isSignedIn() &&
+        ('email_verified' in request.auth.token) &&
+        request.auth.token.email_verified == true &&
+        ('email' in request.auth.token) &&
+        request.auth.token.email == 'superservice.kolkata@gmail.com';
+    }
+
+    function isAdmin() {
+      return isBootstrappedAdmin() ||
+        (isSignedIn() && exists(/databases/$(database)/documents/admins/$(request.auth.uid)));
+    }
+
+    function isValidUserProfile(data) {
+      return data.userId is string && data.userId.size() >= 1 && data.userId.size() <= 128 &&
+        data.displayName is string && data.displayName.size() >= 1 && data.displayName.size() <= 80 &&
+        data.email is string && data.email.size() >= 3 && data.email.size() <= 200 &&
+        data.portalRole in ['admin', 'staff', 'client', 'guest'] &&
+        (!('phoneNumber' in data) || (data.phoneNumber is string && data.phoneNumber.size() <= 30)) &&
+        data.createdAt is timestamp && data.createdAt <= request.time &&
+        (!('updatedAt' in data) || (data.updatedAt is timestamp && data.updatedAt <= request.time));
+    }
+
+    function isValidServiceTask(data) {
+      return data.userId is string && data.userId.size() >= 1 && data.userId.size() <= 128 &&
+        data.title is string && data.title.size() >= 1 && data.title.size() <= 140 &&
+        data.description is string && data.description.size() <= 1000 &&
+        data.taskType in ['task_assignment', 'calendar_reminder', 'shift_checkout', 'service_request'] &&
+        data.status in ['pending', 'in_progress', 'completed'] &&
+        data.dueDateLabel is string && data.dueDateLabel.size() <= 80 &&
+        (!('contactPhone' in data) || (data.contactPhone is string && data.contactPhone.size() <= 30)) &&
+        data.createdAt is timestamp && data.createdAt <= request.time &&
+        (!('updatedAt' in data) || (data.updatedAt is timestamp && data.updatedAt <= request.time));
+    }
+
+    function isValidServiceMessage(data) {
+      return data.userId is string && data.userId.size() >= 1 && data.userId.size() <= 128 &&
+        data.senderName is string && data.senderName.size() >= 1 && data.senderName.size() <= 80 &&
+        data.recipientName is string && data.recipientName.size() >= 1 && data.recipientName.size() <= 80 &&
+        data.channel in ['message', 'call_log'] &&
+        data.body is string && data.body.size() >= 1 && data.body.size() <= 1000 &&
+        data.isUrgent is bool &&
+        (!('recipientPhone' in data) || (data.recipientPhone is string && data.recipientPhone.size() <= 30)) &&
+        data.createdAt is timestamp && data.createdAt <= request.time &&
+        (!('updatedAt' in data) || (data.updatedAt is timestamp && data.updatedAt <= request.time));
+    }
+
+    function isValidNotification(data) {
+      return data.userId is string && data.userId.size() >= 1 && data.userId.size() <= 128 &&
+        data.title is string && data.title.size() >= 1 && data.title.size() <= 140 &&
+        data.body is string && data.body.size() >= 1 && data.body.size() <= 1000 &&
+        data.type in ['task_assignment', 'calendar_reminder', 'shift_checkout', 'internal_message', 'call_log', 'service_request', 'broadcast'] &&
+        data.isRead is bool &&
+        data.isBroadcast is bool &&
+        data.targetAudience in ['Personal', 'Staff', 'Clients', 'Guests', 'All Three'] &&
+        (!('relatedTaskId' in data) || (data.relatedTaskId is string && data.relatedTaskId.size() <= 128)) &&
+        (!('contactPhone' in data) || (data.contactPhone is string && data.contactPhone.size() <= 30)) &&
+        data.createdAt is timestamp && data.createdAt <= request.time &&
+        (!('updatedAt' in data) || (data.updatedAt is timestamp && data.updatedAt <= request.time));
+    }
+
+    function isValidBroadcast(data) {
+      return data.authorId is string && data.authorId.size() >= 1 && data.authorId.size() <= 128 &&
+        data.authorEmail is string && data.authorEmail.size() >= 3 && data.authorEmail.size() <= 200 &&
+        data.title is string && data.title.size() >= 1 && data.title.size() <= 140 &&
+        data.body is string && data.body.size() >= 1 && data.body.size() <= 1000 &&
+        data.targetAudience in ['Staff', 'Clients', 'Guests', 'All Three'] &&
+        data.createdAt is timestamp && data.createdAt <= request.time &&
+        (!('updatedAt' in data) || (data.updatedAt is timestamp && data.updatedAt <= request.time));
+    }
+
+    function isValidBroadcastState(data, userId, broadcastId) {
+      return data.userId is string && data.userId == userId &&
+        data.broadcastId is string && data.broadcastId == broadcastId &&
+        data.isRead is bool &&
+        data.isDismissed is bool &&
+        data.createdAt is timestamp && data.createdAt <= request.time &&
+        (!('updatedAt' in data) || (data.updatedAt is timestamp && data.updatedAt <= request.time));
+    }
+
+    match /admins/{uid} {
+      allow get: if isSignedIn() && isValidId(uid) && (request.auth.uid == uid || isAdmin());
+      allow list: if isAdmin();
+      allow create: if isSignedIn() && isValidId(uid) && isAdmin() &&
+        incoming().keys().hasAll(['uid', 'email', 'createdAt']) &&
+        incoming().keys().hasOnly(['uid', 'email', 'createdAt', 'updatedAt']) &&
+        incoming().uid == uid &&
+        incoming().email is string && incoming().email.size() >= 3 && incoming().email.size() <= 200 &&
+        incoming().createdAt is timestamp && incoming().createdAt <= request.time;
+      allow update: if isSignedIn() && isValidId(uid) && isAdmin() &&
+        incoming().uid == existing().uid &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().email is string && incoming().email.size() >= 3 && incoming().email.size() <= 200 &&
+        incoming().diff(existing()).affectedKeys().hasOnly(['email', 'updatedAt']);
+      allow delete: if isSignedIn() && isValidId(uid) && isAdmin();
+    }
+
+    match /users/{userId} {
+      allow get: if isSignedIn() && isValidId(userId) && (request.auth.uid == userId || isAdmin());
+      allow list: if isAdmin();
+      allow create: if isSignedIn() && isValidId(userId) &&
+        isValidUserProfile(incoming()) &&
+        (request.auth.uid == userId || isAdmin()) &&
+        incoming().userId == userId &&
+        incoming().keys().hasAll(['userId', 'displayName', 'email', 'portalRole', 'createdAt']) &&
+        incoming().keys().hasOnly(['userId', 'displayName', 'email', 'portalRole', 'phoneNumber', 'createdAt', 'updatedAt']) &&
+        (isAdmin() || incoming().portalRole == 'guest');
+      allow update: if isSignedIn() && isValidId(userId) &&
+        isValidUserProfile(incoming()) &&
+        (request.auth.uid == userId || isAdmin()) &&
+        incoming().userId == existing().userId &&
+        incoming().createdAt == existing().createdAt &&
+        (isAdmin() || (
+          incoming().portalRole == existing().portalRole &&
+          incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'phoneNumber', 'updatedAt'])
+        )) &&
+        incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'portalRole', 'phoneNumber', 'updatedAt']);
+      allow delete: if isSignedIn() && isValidId(userId) && isAdmin();
+
+      match /tasks/{taskId} {
+        allow get: if isSignedIn() && isValidId(userId) && isValidId(taskId) && (request.auth.uid == userId || isAdmin());
+        allow list: if isSignedIn() && isValidId(userId) && (request.auth.uid == userId || isAdmin());
+        allow create: if isSignedIn() && isValidId(userId) && isValidId(taskId) &&
+          isValidServiceTask(incoming()) &&
+          (request.auth.uid == userId || isAdmin()) &&
+          incoming().userId == userId &&
+          incoming().keys().hasAll(['userId', 'title', 'description', 'taskType', 'status', 'dueDateLabel', 'createdAt']) &&
+          incoming().keys().hasOnly(['userId', 'title', 'description', 'taskType', 'status', 'dueDateLabel', 'contactPhone', 'createdAt', 'updatedAt']);
+        allow update: if isSignedIn() && isValidId(userId) && isValidId(taskId) &&
+          isValidServiceTask(incoming()) &&
+          (request.auth.uid == userId || isAdmin()) &&
+          (existing().status != 'completed' || isAdmin()) &&
+          incoming().userId == existing().userId &&
+          incoming().createdAt == existing().createdAt &&
+          incoming().diff(existing()).affectedKeys().hasOnly(['title', 'description', 'taskType', 'status', 'dueDateLabel', 'contactPhone', 'updatedAt']);
+        allow delete: if isSignedIn() && isValidId(userId) && isValidId(taskId) && (request.auth.uid == userId || isAdmin());
+      }
+
+      match /messages/{messageId} {
+        allow get: if isSignedIn() && isValidId(userId) && isValidId(messageId) && (request.auth.uid == userId || isAdmin());
+        allow list: if isSignedIn() && isValidId(userId) && (request.auth.uid == userId || isAdmin());
+        allow create: if isSignedIn() && isValidId(userId) && isValidId(messageId) &&
+          isValidServiceMessage(incoming()) &&
+          (request.auth.uid == userId || isAdmin()) &&
+          incoming().userId == userId &&
+          incoming().keys().hasAll(['userId', 'senderName', 'recipientName', 'channel', 'body', 'isUrgent', 'createdAt']) &&
+          incoming().keys().hasOnly(['userId', 'senderName', 'recipientName', 'channel', 'body', 'isUrgent', 'recipientPhone', 'createdAt', 'updatedAt']);
+        allow update: if isSignedIn() && isValidId(userId) && isValidId(messageId) &&
+          isValidServiceMessage(incoming()) &&
+          (request.auth.uid == userId || isAdmin()) &&
+          incoming().userId == existing().userId &&
+          incoming().createdAt == existing().createdAt &&
+          incoming().diff(existing()).affectedKeys().hasOnly(['isUrgent', 'updatedAt']);
+        allow delete: if isSignedIn() && isValidId(userId) && isValidId(messageId) && (request.auth.uid == userId || isAdmin());
+      }
+
+      match /notifications/{notificationId} {
+        allow get: if isSignedIn() && isValidId(userId) && isValidId(notificationId) && (request.auth.uid == userId || isAdmin());
+        allow list: if isSignedIn() && isValidId(userId) && (request.auth.uid == userId || isAdmin());
+        allow create: if isSignedIn() && isValidId(userId) && isValidId(notificationId) &&
+          isValidNotification(incoming()) &&
+          (request.auth.uid == userId || isAdmin()) &&
+          incoming().userId == userId &&
+          incoming().keys().hasAll(['userId', 'title', 'body', 'type', 'isRead', 'isBroadcast', 'targetAudience', 'createdAt']) &&
+          incoming().keys().hasOnly(['userId', 'title', 'body', 'type', 'isRead', 'isBroadcast', 'targetAudience', 'relatedTaskId', 'contactPhone', 'createdAt', 'updatedAt']);
+        allow update: if isSignedIn() && isValidId(userId) && isValidId(notificationId) &&
+          isValidNotification(incoming()) &&
+          (request.auth.uid == userId || isAdmin()) &&
+          incoming().userId == existing().userId &&
+          incoming().createdAt == existing().createdAt &&
+          incoming().diff(existing()).affectedKeys().hasOnly(['isRead', 'updatedAt']);
+        allow delete: if isSignedIn() && isValidId(userId) && isValidId(notificationId) && (request.auth.uid == userId || isAdmin());
+      }
+
+      match /broadcast_states/{broadcastId} {
+        allow get: if isSignedIn() && isValidId(userId) && isValidId(broadcastId) && (request.auth.uid == userId || isAdmin());
+        allow list: if isSignedIn() && isValidId(userId) && (request.auth.uid == userId || isAdmin());
+        allow create: if isSignedIn() && isValidId(userId) && isValidId(broadcastId) &&
+          isValidBroadcastState(incoming(), userId, broadcastId) &&
+          request.auth.uid == userId &&
+          incoming().keys().hasAll(['userId', 'broadcastId', 'isRead', 'isDismissed', 'createdAt']) &&
+          incoming().keys().hasOnly(['userId', 'broadcastId', 'isRead', 'isDismissed', 'createdAt', 'updatedAt']);
+        allow update: if isSignedIn() && isValidId(userId) && isValidId(broadcastId) &&
+          isValidBroadcastState(incoming(), userId, broadcastId) &&
+          request.auth.uid == userId &&
+          incoming().userId == existing().userId &&
+          incoming().broadcastId == existing().broadcastId &&
+          incoming().createdAt == existing().createdAt &&
+          incoming().diff(existing()).affectedKeys().hasOnly(['isRead', 'isDismissed', 'updatedAt']);
+        allow delete: if isSignedIn() && isValidId(userId) && isValidId(broadcastId) && (request.auth.uid == userId || isAdmin());
+      }
+    }
+
+    match /broadcasts/{broadcastId} {
+      allow get: if isSignedIn() && isValidId(broadcastId) &&
+        (isAdmin() || existing().targetAudience in ['Staff', 'Clients', 'Guests', 'All Three']);
+      allow list: if isSignedIn() &&
+        (isAdmin() || resource.data.targetAudience in ['Staff', 'Clients', 'Guests', 'All Three']);
+      allow create: if isSignedIn() && isValidId(broadcastId) && isAdmin() &&
+        isValidBroadcast(incoming()) &&
+        incoming().authorId == request.auth.uid &&
+        incoming().keys().hasAll(['authorId', 'authorEmail', 'title', 'body', 'targetAudience', 'createdAt']) &&
+        incoming().keys().hasOnly(['authorId', 'authorEmail', 'title', 'body', 'targetAudience', 'createdAt', 'updatedAt']);
+      allow update: if isSignedIn() && isValidId(broadcastId) && isAdmin() &&
+        isValidBroadcast(incoming()) &&
+        incoming().authorId == existing().authorId &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().diff(existing()).affectedKeys().hasOnly(['title', 'body', 'targetAudience', 'updatedAt']);
+      allow delete: if isSignedIn() && isValidId(broadcastId) && isAdmin();
+    }
+  }
+}
